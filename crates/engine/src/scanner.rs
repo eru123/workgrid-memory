@@ -10,3 +10,6 @@ pub mod chunker;
 
 /// Hashing module — computes content hashes for change detection.
 pub mod hasher;
+
+/// Symbol extractor — regex-based code symbol extraction for JS/TS, PHP, Python, Rust, Markdown.
+pub mod symbol_extractor;

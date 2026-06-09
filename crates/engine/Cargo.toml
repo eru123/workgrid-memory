@@ -13,5 +13,6 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 rusqlite = { workspace = true }
 sha2 = { workspace = true }
+regex = { workspace = true }
 reqwest = { workspace = true }
 workgrid-shared = { path = "../shared", features = ["rusqlite"] }
