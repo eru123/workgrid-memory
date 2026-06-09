@@ -47,18 +47,19 @@ impl EmbeddingProvider {
             EmbeddingProvider::Ollama { base_url, model } => {
                 embed_ollama(base_url, model, texts).await
             }
-            EmbeddingProvider::OpenAiCompatible { .. } => {
-                Err(WorkGridError::Generic("OpenAI-compatible provider not implemented".into()))
-            }
+            EmbeddingProvider::OpenAiCompatible { .. } => Err(WorkGridError::Generic(
+                "OpenAI-compatible provider not implemented".into(),
+            )),
         }
     }
 
     /// Generate a single embedding.
     pub async fn embed_one(&self, text: &str) -> Result<Vec<f32>, WorkGridError> {
         let results = self.embed_batch(&[text.to_string()]).await?;
-        results.into_iter().next().ok_or_else(|| {
-            WorkGridError::Generic("No embedding returned".into())
-        })
+        results
+            .into_iter()
+            .next()
+            .ok_or_else(|| WorkGridError::Generic("No embedding returned".into()))
     }
 }
 

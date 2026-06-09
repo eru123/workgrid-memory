@@ -124,7 +124,11 @@ fn walk_directory(
 
             // Skip files larger than max
             if size > DEFAULT_MAX_FILE_SIZE_BYTES {
-                debug!("Skipping large file: {} ({} bytes)", relative.display(), size);
+                debug!(
+                    "Skipping large file: {} ({} bytes)",
+                    relative.display(),
+                    size
+                );
                 result.total_ignored += 1;
                 continue;
             }
@@ -197,9 +201,16 @@ mod tests {
 
         let result = scan_workspace(&dir, &[]).unwrap();
 
-        assert_eq!(result.files.len(), 2, "Should find main.ts and config.json, skip node_modules");
+        assert_eq!(
+            result.files.len(),
+            2,
+            "Should find main.ts and config.json, skip node_modules"
+        );
         let has_ts = result.files.iter().any(|f| f.relative_path == "main.ts");
-        let has_json = result.files.iter().any(|f| f.relative_path == "config.json");
+        let has_json = result
+            .files
+            .iter()
+            .any(|f| f.relative_path == "config.json");
         assert!(has_ts);
         assert!(has_json);
 
@@ -208,11 +219,26 @@ mod tests {
 
     #[test]
     fn test_detect_language() {
-        assert_eq!(detect_language(Path::new("src/main.ts")), Some("typescript".to_string()));
-        assert_eq!(detect_language(Path::new("src/App.tsx")), Some("tsx".to_string()));
-        assert_eq!(detect_language(Path::new("src/index.php")), Some("php".to_string()));
-        assert_eq!(detect_language(Path::new("README.md")), Some("markdown".to_string()));
+        assert_eq!(
+            detect_language(Path::new("src/main.ts")),
+            Some("typescript".to_string())
+        );
+        assert_eq!(
+            detect_language(Path::new("src/App.tsx")),
+            Some("tsx".to_string())
+        );
+        assert_eq!(
+            detect_language(Path::new("src/index.php")),
+            Some("php".to_string())
+        );
+        assert_eq!(
+            detect_language(Path::new("README.md")),
+            Some("markdown".to_string())
+        );
         assert_eq!(detect_language(Path::new("unknown.xyz")), None);
-        assert_eq!(detect_language(Path::new("Dockerfile")), Some("dockerfile".to_string()));
+        assert_eq!(
+            detect_language(Path::new("Dockerfile")),
+            Some("dockerfile".to_string())
+        );
     }
 }

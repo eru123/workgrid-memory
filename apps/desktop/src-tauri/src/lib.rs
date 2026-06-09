@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::Manager;
-use workgrid_engine::indexer::metadata::MetadataStore;
+use workgrid_engine::Engine;
+use workgrid_mcp_server::McpServer;
 
 mod commands;
 
@@ -16,18 +16,20 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            // Initialize the metadata store in the app data directory
             let app_data_dir = app
                 .path()
                 .app_data_dir()
                 .expect("failed to resolve app data directory");
 
-            let db_path = app_data_dir.join("app.sqlite");
-            let store = MetadataStore::open(&db_path)
-                .expect("failed to open app database");
+            let engine = Engine::open(&app_data_dir)
+                .expect("failed to open engine data stores");
+
+            let engine = Arc::new(Mutex::new(engine));
+            let mcp_server = McpServer::new(Arc::clone(&engine), 9876);
 
             app.manage(AppState {
-                store: Mutex::new(store),
+                engine,
+                mcp_server: Mutex::new(mcp_server),
             });
 
             #[cfg(debug_assertions)]
@@ -44,6 +46,13 @@ pub fn run() {
             commands::list_workspaces,
             commands::get_workspace,
             commands::remove_workspace,
+            commands::scan_workspace,
+            commands::index_workspace,
+            commands::search_workspace,
+            commands::get_workspace_stats,
+            commands::start_mcp_server,
+            commands::stop_mcp_server,
+            commands::get_mcp_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running WorkGrid Memory");

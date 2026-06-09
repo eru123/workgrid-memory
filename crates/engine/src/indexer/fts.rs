@@ -48,7 +48,8 @@ impl WorkspaceMetadataStore {
                 start_line INTEGER NOT NULL,
                 end_line INTEGER NOT NULL,
                 token_count INTEGER,
-                hash TEXT NOT NULL
+                hash TEXT NOT NULL,
+                embedding BLOB
             );
 
             CREATE TABLE IF NOT EXISTS symbols (
@@ -91,6 +92,13 @@ impl WorkspaceMetadataStore {
             );
         "#;
         self.db.execute_batch(schema)?;
+
+        // Migration: add embedding column for vector storage (v2 schema).
+        // Ignore error if the column already exists.
+        let _ = self
+            .db
+            .execute_batch("ALTER TABLE chunks ADD COLUMN embedding BLOB;");
+
         Ok(())
     }
 
@@ -112,7 +120,8 @@ impl WorkspaceMetadataStore {
                    hash = excluded.hash, \
                    size = excluded.size, \
                    indexed_at = excluded.indexed_at";
-        self.db.execute(sql, params![&id, path, language, hash, size, &now],)?;
+        self.db
+            .execute(sql, params![&id, path, language, hash, size, &now])?;
 
         Ok(id)
     }
@@ -155,7 +164,8 @@ impl WorkspaceMetadataStore {
     /// Full-text search using FTS5.
     pub fn search_fts(&self, query: &str, limit: usize) -> Result<Vec<FtsResult>, WorkGridError> {
         // Simple cleanup: remove characters that break FTS5 syntax
-        let safe_query = query.chars()
+        let safe_query = query
+            .chars()
             .filter(|&c| c.is_alphanumeric() || c == '_' || c == ' ')
             .collect::<String>();
 
@@ -176,21 +186,23 @@ impl WorkspaceMetadataStore {
 
         let mut stmt = self.db.prepare(&sql)?;
 
-        let results = stmt.query_map(params![&fts_query], |row| {
-            Ok(FtsResult {
-                chunk_id: row.get(0)?,
-                file_id: row.get(1)?,
-                symbol_id: row.get(2)?,
-                chunk_type: row.get(3)?,
-                content: row.get(4)?,
-                start_line: row.get(5)?,
-                end_line: row.get(6)?,
-                token_count: row.get(7)?,
-                hash: row.get(8)?,
-                file_path: row.get(9)?,
-                score: row.get(10)?,
-            })
-        })?.collect::<Result<Vec<_>, _>>()?;
+        let results = stmt
+            .query_map(params![&fts_query], |row| {
+                Ok(FtsResult {
+                    chunk_id: row.get(0)?,
+                    file_id: row.get(1)?,
+                    symbol_id: row.get(2)?,
+                    chunk_type: row.get(3)?,
+                    content: row.get(4)?,
+                    start_line: row.get(5)?,
+                    end_line: row.get(6)?,
+                    token_count: row.get(7)?,
+                    hash: row.get(8)?,
+                    file_path: row.get(9)?,
+                    score: row.get(10)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(results)
     }
@@ -203,10 +215,8 @@ impl WorkspaceMetadataStore {
             params![file_id],
         )?;
 
-        self.db.execute(
-            "DELETE FROM chunks WHERE file_id = ?1",
-            params![file_id],
-        )?;
+        self.db
+            .execute("DELETE FROM chunks WHERE file_id = ?1", params![file_id])?;
 
         Ok(())
     }
@@ -219,17 +229,13 @@ impl WorkspaceMetadataStore {
             |row| row.get(0),
         )?;
 
-        let chunk_count: i64 = self.db.query_row(
-            "SELECT COUNT(*) FROM chunks ",
-            [],
-            |row| row.get(0),
-        )?;
+        let chunk_count: i64 = self
+            .db
+            .query_row("SELECT COUNT(*) FROM chunks ", [], |row| row.get(0))?;
 
-        let symbol_count: i64 = self.db.query_row(
-            "SELECT COUNT(*) FROM symbols ",
-            [],
-            |row| row.get(0),
-        )?;
+        let symbol_count: i64 = self
+            .db
+            .query_row("SELECT COUNT(*) FROM symbols ", [], |row| row.get(0))?;
 
         Ok(WorkspaceStats {
             file_count: file_count as u64,
@@ -237,6 +243,60 @@ impl WorkspaceMetadataStore {
             symbol_count: symbol_count as u64,
         })
     }
+
+    /// Store the embedding vector for a chunk (f32 values packed as little-endian bytes).
+    pub fn store_chunk_embedding(
+        &self,
+        chunk_id: &str,
+        embedding: &[f32],
+    ) -> Result<(), WorkGridError> {
+        let bytes: Vec<u8> = embedding.iter().flat_map(|f| f.to_le_bytes()).collect();
+        self.db.execute(
+            "UPDATE chunks SET embedding = ?1 WHERE id = ?2",
+            params![bytes, chunk_id],
+        )?;
+        Ok(())
+    }
+
+    /// Load all chunks that have embeddings for brute-force vector search.
+    /// Returns (chunk_id, file_path, content, start_line, end_line, embedding).
+    pub fn load_embeddings(&self) -> Result<Vec<EmbeddingRow>, WorkGridError> {
+        let mut stmt = self.db.prepare(
+            "SELECT c.id, f.path, c.content, c.start_line, c.end_line, c.embedding
+             FROM chunks c
+             JOIN files f ON f.id = c.file_id
+             WHERE c.embedding IS NOT NULL",
+        )?;
+        let rows = stmt
+            .query_map([], |row| {
+                let blob: Vec<u8> = row.get(5)?;
+                let embedding: Vec<f32> = blob
+                    .chunks_exact(4)
+                    .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+                    .collect();
+                Ok(EmbeddingRow {
+                    chunk_id: row.get(0)?,
+                    file_path: row.get(1)?,
+                    content: row.get(2)?,
+                    start_line: row.get(3)?,
+                    end_line: row.get(4)?,
+                    embedding,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+}
+
+/// A chunk row with its embedding loaded for vector search.
+#[derive(Debug, Clone)]
+pub struct EmbeddingRow {
+    pub chunk_id: String,
+    pub file_path: String,
+    pub content: String,
+    pub start_line: u32,
+    pub end_line: u32,
+    pub embedding: Vec<f32>,
 }
 
 #[derive(Debug, Clone)]
@@ -285,7 +345,9 @@ mod tests {
         let store = WorkspaceMetadataStore::open(&db_path).unwrap();
 
         let path = "src/main.ts ";
-        let id = store.insert_file(path.trim(), Some("typescript"), "abc123", 1024).unwrap();
+        let id = store
+            .insert_file(path.trim(), Some("typescript"), "abc123", 1024)
+            .unwrap();
         assert!(!id.is_empty());
 
         std::fs::remove_file(&db_path).ok();
@@ -298,8 +360,21 @@ mod tests {
 
         let fpath = "src/auth.ts ";
         let content = "function login() { return true; } ";
-        let file_id = store.insert_file(fpath.trim(), Some("typescript"), "hash1", 500).unwrap();
-        store.insert_chunk(&file_id, fpath.trim(), "symbol", content, 10, 15, None, None).unwrap();
+        let file_id = store
+            .insert_file(fpath.trim(), Some("typescript"), "hash1", 500)
+            .unwrap();
+        store
+            .insert_chunk(
+                &file_id,
+                fpath.trim(),
+                "symbol",
+                content,
+                10,
+                15,
+                None,
+                None,
+            )
+            .unwrap();
 
         let results = store.search_fts("login", 10).unwrap();
         assert_eq!(results.len(), 1);
@@ -326,8 +401,12 @@ mod tests {
 
         let fpath = "src/lib.ts ";
         let content = "export const x = 1; ";
-        let file_id = store.insert_file(fpath.trim(), Some("typescript"), "h1", 100).unwrap();
-        store.insert_chunk(&file_id, fpath.trim(), "symbol", content, 1, 1, None, None).unwrap();
+        let file_id = store
+            .insert_file(fpath.trim(), Some("typescript"), "h1", 100)
+            .unwrap();
+        store
+            .insert_chunk(&file_id, fpath.trim(), "symbol", content, 1, 1, None, None)
+            .unwrap();
 
         let stats = store.get_stats().unwrap();
         assert_eq!(stats.file_count, 1);

@@ -1,8 +1,8 @@
 use rusqlite::{params, Connection};
 use std::path::Path;
 use std::process::Command;
-use workgrid_shared::types::{Workspace, WorkspaceStatus};
 use workgrid_shared::errors::WorkGridError;
+use workgrid_shared::types::{Workspace, WorkspaceStatus};
 
 /// Manages the global app database (app.sqlite) and the workspace registry.
 pub struct MetadataStore {
@@ -43,13 +43,18 @@ impl MetadataStore {
                 key TEXT PRIMARY KEY,
                 value_json TEXT NOT NULL,
                 updated_at TEXT NOT NULL
-            );"
+            );",
         )?;
         Ok(())
     }
 
     /// Add a new workspace. Returns the created workspace.
-    pub fn add_workspace(&self, name: &str, root_path: &str, git_remote: Option<&str>) -> Result<Workspace, WorkGridError> {
+    pub fn add_workspace(
+        &self,
+        name: &str,
+        root_path: &str,
+        git_remote: Option<&str>,
+    ) -> Result<Workspace, WorkGridError> {
         // Canonicalize and validate path
         let canonical = std::fs::canonicalize(root_path)
             .map_err(|_| WorkGridError::WorkspacePathNotFound(root_path.to_string()))?;
@@ -90,21 +95,23 @@ impl MetadataStore {
              ORDER BY created_at DESC"
         )?;
 
-        let workspaces = stmt.query_map([], |row| {
-            Ok(Workspace {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                root_path: row.get(2)?,
-                git_remote: row.get(3)?,
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
-                last_indexed_at: row.get(6)?,
-                status: {
-                    let s: String = row.get(7)?;
-                    Self::parse_status(&s)
-                },
-            })
-        })?.collect::<Result<Vec<_>, _>>()?;
+        let workspaces = stmt
+            .query_map([], |row| {
+                Ok(Workspace {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    root_path: row.get(2)?,
+                    git_remote: row.get(3)?,
+                    created_at: row.get(4)?,
+                    updated_at: row.get(5)?,
+                    last_indexed_at: row.get(6)?,
+                    status: {
+                        let s: String = row.get(7)?;
+                        Self::parse_status(&s)
+                    },
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(workspaces)
     }
@@ -141,10 +148,9 @@ impl MetadataStore {
 
     /// Remove a workspace by ID. Does NOT delete workspace data on disk.
     pub fn remove_workspace(&self, id: &str) -> Result<(), WorkGridError> {
-        let affected = self.db.execute(
-            "DELETE FROM workspaces WHERE id = ?1",
-            params![id],
-        )?;
+        let affected = self
+            .db
+            .execute("DELETE FROM workspaces WHERE id = ?1", params![id])?;
 
         if affected == 0 {
             return Err(WorkGridError::WorkspaceNotFound(id.to_string()));
@@ -154,7 +160,11 @@ impl MetadataStore {
     }
 
     /// Update workspace status.
-    pub fn update_workspace_status(&self, id: &str, status: WorkspaceStatus) -> Result<(), WorkGridError> {
+    pub fn update_workspace_status(
+        &self,
+        id: &str,
+        status: WorkspaceStatus,
+    ) -> Result<(), WorkGridError> {
         let status_str = Self::status_to_str(&status);
         let now = chrono::Utc::now().to_rfc3339();
 
@@ -273,7 +283,9 @@ mod tests {
         let db_path = temp_db_path();
         let store = MetadataStore::open(&db_path).unwrap();
         let tmp_dir = std::env::temp_dir();
-        store.add_workspace("First", tmp_dir.to_str().unwrap(), None).unwrap();
+        store
+            .add_workspace("First", tmp_dir.to_str().unwrap(), None)
+            .unwrap();
         let result = store.add_workspace("Second", tmp_dir.to_str().unwrap(), None);
         assert!(result.is_err());
         std::fs::remove_file(&db_path).ok();
@@ -284,7 +296,9 @@ mod tests {
         let db_path = temp_db_path();
         let store = MetadataStore::open(&db_path).unwrap();
         let tmp_dir = std::env::temp_dir();
-        let ws = store.add_workspace("To Remove", tmp_dir.to_str().unwrap(), None).unwrap();
+        let ws = store
+            .add_workspace("To Remove", tmp_dir.to_str().unwrap(), None)
+            .unwrap();
         store.remove_workspace(&ws.id).unwrap();
         assert!(store.list_workspaces().unwrap().is_empty());
         std::fs::remove_file(&db_path).ok();

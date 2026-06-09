@@ -40,7 +40,9 @@ pub fn chunk_text(content: &str, config: &ChunkConfig) -> Vec<TextChunk> {
     while start < lines.len() {
         let end = (start + config.max_chunk_lines).min(lines.len());
         let chunk_lines = &lines[start..end];
-        if chunk_lines.len() >= config.min_chunk_lines || start + config.max_chunk_lines >= lines.len() {
+        if chunk_lines.len() >= config.min_chunk_lines
+            || start + config.max_chunk_lines >= lines.len()
+        {
             chunks.push(TextChunk {
                 content: chunk_lines.join("\n"),
                 start_line: (start + 1) as u32,
@@ -66,7 +68,10 @@ mod tests {
 
     #[test]
     fn test_large_file() {
-        let config = ChunkConfig { max_chunk_lines: 50, min_chunk_lines: 10 };
+        let config = ChunkConfig {
+            max_chunk_lines: 50,
+            min_chunk_lines: 10,
+        };
         let lines: Vec<String> = (1..=200).map(|i| format!("line {}", i)).collect();
         let chunks = chunk_text(&lines.join("\n"), &config);
         assert_eq!(chunks.len(), 4);

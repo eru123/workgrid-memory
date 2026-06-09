@@ -72,7 +72,8 @@ fn search_workspace_tool() -> Tool {
 fn get_file_context_tool() -> Tool {
     Tool {
         name: "get_file_context".into(),
-        description: "Get context for a specific file including symbols, imports, and related files".into(),
+        description:
+            "Get context for a specific file including symbols, imports, and related files".into(),
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {
@@ -87,7 +88,8 @@ fn get_file_context_tool() -> Tool {
 fn explain_symbol_tool() -> Tool {
     Tool {
         name: "explain_symbol".into(),
-        description: "Explain a symbol (function, class, method, etc.) with definition and references".into(),
+        description:
+            "Explain a symbol (function, class, method, etc.) with definition and references".into(),
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {
@@ -117,7 +119,8 @@ fn find_references_tool() -> Tool {
 fn get_related_files_tool() -> Tool {
     Tool {
         name: "get_related_files".into(),
-        description: "Get files related by imports, routes, database usage, or symbol relationships".into(),
+        description:
+            "Get files related by imports, routes, database usage, or symbol relationships".into(),
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {
@@ -191,7 +194,8 @@ fn get_profile_context_tool() -> Tool {
 fn get_relevant_profiles_tool() -> Tool {
     Tool {
         name: "get_relevant_profiles".into(),
-        description: "Get profiles relevant to a task based on trigger terms and workspace links".into(),
+        description: "Get profiles relevant to a task based on trigger terms and workspace links"
+            .into(),
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {
@@ -206,7 +210,8 @@ fn get_relevant_profiles_tool() -> Tool {
 fn build_context_pack_tool() -> Tool {
     Tool {
         name: "build_context_pack".into(),
-        description: "Build a context pack with separated workspace evidence and profile context".into(),
+        description: "Build a context pack with separated workspace evidence and profile context"
+            .into(),
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {

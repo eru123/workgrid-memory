@@ -21,7 +21,11 @@ pub fn compute_final_score(
     graph_score: f64,
     recency_score: f64,
 ) -> f64 {
-    0.40 * vector_score + 0.25 * keyword_score + 0.20 * symbol_score + 0.10 * graph_score + 0.05 * recency_score
+    0.40 * vector_score
+        + 0.25 * keyword_score
+        + 0.20 * symbol_score
+        + 0.10 * graph_score
+        + 0.05 * recency_score
 }
 
 #[cfg(test)]

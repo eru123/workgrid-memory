@@ -61,7 +61,13 @@ impl ProfileStore {
         Ok(())
     }
 
-    pub fn create_profile(&self, name: &str, profile_type: &str, description: Option<&str>, sensitivity: &str) -> Result<String, WorkGridError> {
+    pub fn create_profile(
+        &self,
+        name: &str,
+        profile_type: &str,
+        description: Option<&str>,
+        sensitivity: &str,
+    ) -> Result<String, WorkGridError> {
         let id = Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
         self.db.execute(
@@ -73,15 +79,31 @@ impl ProfileStore {
 
     pub fn list_profiles(&self) -> Result<Vec<ProfileRow>, WorkGridError> {
         let mut stmt = self.db.prepare("SELECT id,name,profile_type,description,sensitivity,mcp_exposure,created_at,updated_at FROM profiles WHERE archived=0 ORDER BY updated_at DESC")?;
-        let rows = stmt.query_map([], |row| Ok(ProfileRow {
-            id: row.get(0)?, name: row.get(1)?, profile_type: row.get(2)?,
-            description: row.get(3)?, sensitivity: row.get(4)?, mcp_exposure: row.get(5)?,
-            created_at: row.get(6)?, updated_at: row.get(7)?,
-        }))?.collect::<Result<Vec<_>,_>>()?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(ProfileRow {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    profile_type: row.get(2)?,
+                    description: row.get(3)?,
+                    sensitivity: row.get(4)?,
+                    mcp_exposure: row.get(5)?,
+                    created_at: row.get(6)?,
+                    updated_at: row.get(7)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
     }
 
-    pub fn add_instruction(&self, profile_id: &str, name: &str, trigger_terms: &[&str], rules: &[&str], priority: i32) -> Result<String, WorkGridError> {
+    pub fn add_instruction(
+        &self,
+        profile_id: &str,
+        name: &str,
+        trigger_terms: &[&str],
+        rules: &[&str],
+        priority: i32,
+    ) -> Result<String, WorkGridError> {
         let id = Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
         let triggers = serde_json::to_string(trigger_terms).unwrap_or_default();
@@ -93,33 +115,67 @@ impl ProfileStore {
         Ok(id)
     }
 
-    pub fn find_matching_instructions(&self, task: &str) -> Result<Vec<InstructionMatch>, WorkGridError> {
+    pub fn find_matching_instructions(
+        &self,
+        task: &str,
+    ) -> Result<Vec<InstructionMatch>, WorkGridError> {
         let mut stmt = self.db.prepare(
             "SELECT pi.id,pi.profile_id,pi.name,pi.trigger_terms_json,pi.rules_json,pi.priority,p.name FROM profile_instructions pi JOIN profiles p ON p.id=pi.profile_id WHERE pi.enabled=1 AND p.mcp_exposure='enabled' AND p.archived=0 ORDER BY pi.priority"
         )?;
-        let all: Vec<InstructionMatch> = stmt.query_map([], |row| Ok(InstructionMatch {
-            instruction_id: row.get(0)?, profile_id: row.get(1)?, name: row.get(2)?,
-            trigger_terms: row.get::<_,String>(3).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
-            rules: row.get::<_,String>(4).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
-            priority: row.get(5)?, profile_name: row.get(6)?,
-        }))?.collect::<Result<Vec<_>,_>>()?;
+        let all: Vec<InstructionMatch> = stmt
+            .query_map([], |row| {
+                Ok(InstructionMatch {
+                    instruction_id: row.get(0)?,
+                    profile_id: row.get(1)?,
+                    name: row.get(2)?,
+                    trigger_terms: row
+                        .get::<_, String>(3)
+                        .ok()
+                        .and_then(|s| serde_json::from_str(&s).ok())
+                        .unwrap_or_default(),
+                    rules: row
+                        .get::<_, String>(4)
+                        .ok()
+                        .and_then(|s| serde_json::from_str(&s).ok())
+                        .unwrap_or_default(),
+                    priority: row.get(5)?,
+                    profile_name: row.get(6)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
         let task_lower = task.to_lowercase();
-        Ok(all.into_iter().filter(|im| im.trigger_terms.iter().any(|t| task_lower.contains(&t.to_lowercase()))).collect())
+        Ok(all
+            .into_iter()
+            .filter(|im| {
+                im.trigger_terms
+                    .iter()
+                    .any(|t| task_lower.contains(&t.to_lowercase()))
+            })
+            .collect())
     }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ProfileRow {
-    pub id: String, pub name: String, pub profile_type: String,
-    pub description: Option<String>, pub sensitivity: String,
-    pub mcp_exposure: String, pub created_at: String, pub updated_at: String,
+    pub id: String,
+    pub name: String,
+    pub profile_type: String,
+    pub description: Option<String>,
+    pub sensitivity: String,
+    pub mcp_exposure: String,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct InstructionMatch {
-    pub instruction_id: String, pub profile_id: String, pub name: String,
-    pub trigger_terms: Vec<String>, pub rules: Vec<String>,
-    pub priority: i32, pub profile_name: String,
+    pub instruction_id: String,
+    pub profile_id: String,
+    pub name: String,
+    pub trigger_terms: Vec<String>,
+    pub rules: Vec<String>,
+    pub priority: i32,
+    pub profile_name: String,
 }
 
 #[cfg(test)]
@@ -134,17 +190,29 @@ mod tests {
     #[test]
     fn test_create_and_list() {
         let (store, p) = temp_db();
-        store.create_profile("Test", "person", None, "private").unwrap();
+        store
+            .create_profile("Test", "person", None, "private")
+            .unwrap();
         assert_eq!(store.list_profiles().unwrap().len(), 1);
         std::fs::remove_file(&p).ok();
     }
     #[test]
     fn test_instruction_matching() {
         let (store, p) = temp_db();
-        let pid = store.create_profile("Style", "skill", None, "enabled").unwrap();
+        let pid = store
+            .create_profile("Style", "skill", None, "enabled")
+            .unwrap();
         // Set mcp_exposure after creation
-        store.db.execute("UPDATE profiles SET mcp_exposure='enabled', sensitivity='internal' WHERE id=?1", params![&pid]).unwrap();
-        store.add_instruction(&pid, "rules", &["commit"], &["imperative"], 10).unwrap();
+        store
+            .db
+            .execute(
+                "UPDATE profiles SET mcp_exposure='enabled', sensitivity='internal' WHERE id=?1",
+                params![&pid],
+            )
+            .unwrap();
+        store
+            .add_instruction(&pid, "rules", &["commit"], &["imperative"], 10)
+            .unwrap();
         let m = store.find_matching_instructions("make a commit").unwrap();
         assert_eq!(m.len(), 1);
         std::fs::remove_file(&p).ok();
