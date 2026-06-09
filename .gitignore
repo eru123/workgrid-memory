@@ -9,6 +9,7 @@ build/
 
 # Tauri
 apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/schemas/
 
 # IDE
 .idea/
