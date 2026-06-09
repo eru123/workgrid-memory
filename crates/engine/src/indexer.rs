@@ -2,3 +2,4 @@
 pub mod metadata;
 pub mod fts;
 pub mod embedding_queue;
+pub mod profile;
