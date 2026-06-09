@@ -937,7 +937,7 @@ Planned MVP:
 
 ## License
 
-MIT
+[MIT License](./LICENSE)
 
 ## Author
 
