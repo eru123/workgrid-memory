@@ -53,6 +53,23 @@ pub fn run() {
             commands::start_mcp_server,
             commands::stop_mcp_server,
             commands::get_mcp_status,
+            commands::create_profile,
+            commands::list_profiles,
+            commands::get_profile,
+            commands::update_profile,
+            commands::delete_profile,
+            commands::archive_profile,
+            commands::set_profile_mcp,
+            commands::search_profiles,
+            commands::add_profile_attribute,
+            commands::get_profile_attributes,
+            commands::add_profile_instruction,
+            commands::find_matching_instructions,
+            commands::add_profile_relationship,
+            commands::get_profile_relationships,
+            commands::link_profile_workspace,
+            commands::get_profile_workspace_links,
+            commands::get_profiles_for_workspace,
         ])
         .run(tauri::generate_context!())
         .expect("error while running WorkGrid Memory");

@@ -252,12 +252,12 @@ impl McpServer {
     }
 
     fn tool_search_profiles(&self, args: &serde_json::Value) -> Result<serde_json::Value, String> {
-        let _query = get_str(args, "query")?;
+        let query = get_str(args, "query")?;
 
         let engine = lock(&self.engine)?;
         let profiles = engine
             .profile_store()
-            .list_profiles()
+            .search_profiles_fts(&query)
             .map_err(|e| e.to_string())?;
 
         Ok(serde_json::to_value(profiles).map_err(|e| e.to_string())?)
@@ -267,11 +267,31 @@ impl McpServer {
         &self,
         args: &serde_json::Value,
     ) -> Result<serde_json::Value, String> {
-        let _profile_id = get_str(args, "profile_id")?;
+        let profile_id = get_str(args, "profile_id")?;
+
+        let engine = lock(&self.engine)?;
+        let profile = engine
+            .profile_store()
+            .get_profile(&profile_id)
+            .map_err(|e| e.to_string())?;
+        let attrs = engine
+            .profile_store()
+            .get_attributes(&profile_id)
+            .map_err(|e| e.to_string())?;
+        let rels = engine
+            .profile_store()
+            .get_relationships(&profile_id)
+            .map_err(|e| e.to_string())?;
+        let links = engine
+            .profile_store()
+            .get_workspace_links(&profile_id)
+            .map_err(|e| e.to_string())?;
 
         Ok(serde_json::json!({
-            "status": "not_implemented",
-            "message": "Profile context retrieval will be available in a future update"
+            "profile": profile,
+            "attributes": attrs,
+            "relationships": rels,
+            "workspace_links": links
         }))
     }
 
