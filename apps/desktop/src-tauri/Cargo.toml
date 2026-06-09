@@ -17,6 +17,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 workgrid-engine = { path = "../../../crates/engine" }
+workgrid-mcp-server = { path = "../../../crates/mcp-server" }
 workgrid-shared = { path = "../../../crates/shared" }
 
 [features]
