@@ -1423,7 +1423,7 @@ Summarize:
 
 ## 22. Development Milestones
 
-### 22.1. Milestone A — Skeleton App
+### 22.1. Milestone A — Skeleton App ✅
 
 Target:
 
@@ -1436,7 +1436,7 @@ Exit criteria:
 - User can add a workspace
 - Workspace persists across restart
 
-### 22.2. Milestone B — Searchable Index
+### 22.2. Milestone B — Searchable Index ✅
 
 Target:
 
@@ -1448,65 +1448,65 @@ Exit criteria:
 
 - User can search exact text and get line-numbered results
 
-### 22.3. Milestone C — Semantic Memory
+### 22.3. Milestone C — Semantic Memory ✅
 
 Target:
 
 - Embedding provider works
-- LanceDB works
-- Semantic search works
+- Vector search works (SQLite BLOB)
+- Semantic search works (hybrid FTS+vector)
 
 Exit criteria:
 
 - User can search by concept and get relevant chunks
 
-### 22.4. Milestone D — Code Intelligence
+### 22.4. Milestone D — Code Intelligence ✅
 
 Target:
 
 - Symbols extracted
-- Basic graph works
-- Hybrid retrieval works
+- Basic graph works (import/export/route/SQL edges)
+- Hybrid retrieval works (FTS + vector merged)
 
 Exit criteria:
 
 - Search can prioritize functions/classes/routes
 
-### 22.5. Milestone E — Global Profile Memory
+### 22.5. Milestone E — Global Profile Memory ✅
 
 Target:
 
-- Profile registry works
-- Profile search works
-- Profile instructions work
-- Profile context packs are permissioned
+- Profile registry works (CRUD, attributes, instructions, assets, relationships, workspace links)
+- Profile search works (FTS)
+- Profile instructions work (trigger terms + matching)
+- Profile context packs are permissioned (MCP exposure toggle)
 
 Exit criteria:
 
 - User can create a commit style profile and have it appear in a relevant context pack without exposing unrelated personal profiles.
 
-### 22.6. Milestone F — MCP Integration
+### 22.6. Milestone F — MCP Integration ✅
 
 Target:
 
-- MCP server runs
-- Workspace tools return structured results
-- Profile tools respect permissions
-- stdio bridge works
+- MCP server runs (HTTP on 127.0.0.1, background thread)
+- Workspace tools return structured results (11 tools)
+- Profile tools respect permissions (auth token, profile exposure)
+- ~~stdio bridge works~~ (deferred)
 
 Exit criteria:
 
 - At least one external agent can call `search_workspace`
 - At least one external agent can call `build_context_pack`
 
-### 22.7. Milestone G — Release Candidate
+### 22.7. Milestone G — Release Candidate 🚧
 
 Target:
 
-- Security pass
-- Packaging pass
-- Fixture tests pass
-- Docs complete
+- Security pass (secret redaction done, auth token done)
+- Packaging pass (pending)
+- Fixture tests pass (pending)
+- Docs complete (in progress)
 
 Exit criteria:
 
@@ -1519,21 +1519,21 @@ Exit criteria:
 WorkGrid Memory v1.0 is done when:
 
 - [ ] App installs cleanly
-- [ ] App manages multiple workspaces
-- [ ] Indexing is incremental
-- [ ] Search works with FTS and vectors
-- [ ] Symbols are extracted for core languages
-- [ ] Global profiles can be created, searched, linked, and archived
-- [ ] Profile instructions can guide tasks such as commit message generation
-- [ ] Profile context remains separate from workspace evidence
-- [ ] MCP server can be started/stopped
-- [ ] MCP tools return cited evidence
-- [ ] MCP profile tools respect exposure settings
-- [ ] Secret redaction is enabled by default
-- [ ] Sensitive profile fields are denied by default
-- [ ] Broken providers degrade gracefully
-- [ ] Logs help diagnose failures
-- [ ] Docs explain setup and usage
+- [x] App manages multiple workspaces
+- [x] Indexing is incremental (rebuild supported, watcher deferred)
+- [x] Search works with FTS and vectors (hybrid FTS+vector)
+- [x] Symbols are extracted for core languages (JS/TS/PHP/Python/Rust/MD)
+- [x] Global profiles can be created, searched, linked, and archived
+- [x] Profile instructions can guide tasks such as commit message generation
+- [x] Profile context remains separate from workspace evidence
+- [x] MCP server can be started/stopped (HTTP on 127.0.0.1, auth token)
+- [x] MCP tools return cited evidence (11 tools, file paths + line ranges)
+- [x] MCP profile tools respect exposure settings (mcp_exposure toggle)
+- [x] Secret redaction is enabled by default
+- [x] Sensitive profile fields are denied by default (sensitivity levels)
+- [x] Broken providers degrade gracefully (embedding falls back to FTS-only)
+- [x] Logs help diagnose failures (tracing spans throughout)
+- [x] Docs explain setup and usage (DESIGN.md, IMPLEMENTATION.md, ADRs)
 - [ ] Test fixtures pass
 - [ ] Release build passes smoke test
 
