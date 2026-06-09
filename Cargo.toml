@@ -4,6 +4,7 @@ members = [
   "crates/engine",
   "crates/mcp-server",
   "crates/shared",
+  "apps/desktop/src-tauri",
 ]
 
 [workspace.package]
