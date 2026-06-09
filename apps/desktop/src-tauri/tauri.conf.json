@@ -39,15 +39,6 @@
   "plugins": {
     "shell": {
       "open": true
-    },
-    "fs": {
-      "scope": {
-        "allow": ["$APPDATA/**", "$HOME/**"],
-        "deny": []
-      }
-    },
-    "dialog": {
-      "open": true
     }
   }
 }

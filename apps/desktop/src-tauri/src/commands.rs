@@ -1,6 +1,6 @@
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tauri::{command, State};
-use std::path::Path;
 use workgrid_engine::indexer::profile::{
     AttributeRow, InstructionMatch, ProfileRow, RelationshipRow, WorkspaceLinkRow,
 };
@@ -27,9 +27,15 @@ pub fn get_app_version() -> String {
 // ── Workspace CRUD (delegated to Engine) ──
 
 #[command]
-pub fn add_workspace(state: State<AppState>, name: String, path: String) -> Result<Workspace, String> {
+pub fn add_workspace(
+    state: State<AppState>,
+    name: String,
+    path: String,
+) -> Result<Workspace, String> {
     let engine = state.engine.lock().map_err(|e| e.to_string())?;
-    engine.add_workspace(&name, &path).map_err(|e| e.to_string())
+    engine
+        .add_workspace(&name, &path)
+        .map_err(|e| e.to_string())
 }
 
 #[command]
@@ -74,12 +80,16 @@ pub fn scan_workspace(path: String) -> Result<ScanResult, String> {
         .map_err(|e| e.to_string())?;
 
     Ok(ScanResult {
-        files: result.files.into_iter().map(|f| FileEntry {
-            relative_path: f.relative_path,
-            size: f.size,
-            language: f.language,
-            hash: f.hash,
-        }).collect(),
+        files: result
+            .files
+            .into_iter()
+            .map(|f| FileEntry {
+                relative_path: f.relative_path,
+                size: f.size,
+                language: f.language,
+                hash: f.hash,
+            })
+            .collect(),
         total_scanned: result.total_scanned,
         total_ignored: result.total_ignored,
         total_errors: result.total_errors,
@@ -94,9 +104,19 @@ pub struct IndexResult {
 }
 
 #[command]
-pub async fn index_workspace(state: State<'_, AppState>, workspace_id: String) -> Result<IndexResult, String> {
-    let engine = state.engine.lock().map_err(|e| e.to_string())?;
-    let stats = engine.index_workspace(&workspace_id).await.map_err(|e| e.to_string())?;
+pub async fn index_workspace(
+    state: State<'_, AppState>,
+    workspace_id: String,
+) -> Result<IndexResult, String> {
+    let engine = Arc::clone(&state.engine);
+    let stats = tauri::async_runtime::spawn_blocking(move || {
+        let engine = engine.lock().map_err(|e| e.to_string())?;
+        tauri::async_runtime::block_on(engine.index_workspace(&workspace_id))
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
     Ok(IndexResult {
         file_count: stats.file_count,
         chunk_count: stats.chunk_count,
@@ -141,9 +161,14 @@ pub fn search_workspace(
 }
 
 #[command]
-pub fn get_workspace_stats(state: State<AppState>, workspace_id: String) -> Result<IndexResult, String> {
+pub fn get_workspace_stats(
+    state: State<AppState>,
+    workspace_id: String,
+) -> Result<IndexResult, String> {
     let engine = state.engine.lock().map_err(|e| e.to_string())?;
-    let stats = engine.get_workspace_stats(&workspace_id).map_err(|e| e.to_string())?;
+    let stats = engine
+        .get_workspace_stats(&workspace_id)
+        .map_err(|e| e.to_string())?;
     Ok(IndexResult {
         file_count: stats.file_count,
         chunk_count: stats.chunk_count,
@@ -230,13 +255,19 @@ pub fn create_profile(
 #[command]
 pub fn list_profiles(state: State<AppState>) -> Result<Vec<ProfileRow>, String> {
     let engine = state.engine.lock().map_err(|e| e.to_string())?;
-    engine.profile_store().list_profiles().map_err(|e| e.to_string())
+    engine
+        .profile_store()
+        .list_profiles()
+        .map_err(|e| e.to_string())
 }
 
 #[command]
 pub fn get_profile(state: State<AppState>, id: String) -> Result<Option<ProfileRow>, String> {
     let engine = state.engine.lock().map_err(|e| e.to_string())?;
-    engine.profile_store().get_profile(&id).map_err(|e| e.to_string())
+    engine
+        .profile_store()
+        .get_profile(&id)
+        .map_err(|e| e.to_string())
 }
 
 #[command]
@@ -251,32 +282,50 @@ pub fn update_profile(
     let engine = state.engine.lock().map_err(|e| e.to_string())?;
     engine
         .profile_store()
-        .update_profile(&id, &name, &profile_type, description.as_deref(), &sensitivity)
+        .update_profile(
+            &id,
+            &name,
+            &profile_type,
+            description.as_deref(),
+            &sensitivity,
+        )
         .map_err(|e| e.to_string())
 }
 
 #[command]
 pub fn delete_profile(state: State<AppState>, id: String) -> Result<(), String> {
     let engine = state.engine.lock().map_err(|e| e.to_string())?;
-    engine.profile_store().delete_profile(&id).map_err(|e| e.to_string())
+    engine
+        .profile_store()
+        .delete_profile(&id)
+        .map_err(|e| e.to_string())
 }
 
 #[command]
 pub fn archive_profile(state: State<AppState>, id: String) -> Result<(), String> {
     let engine = state.engine.lock().map_err(|e| e.to_string())?;
-    engine.profile_store().archive_profile(&id).map_err(|e| e.to_string())
+    engine
+        .profile_store()
+        .archive_profile(&id)
+        .map_err(|e| e.to_string())
 }
 
 #[command]
 pub fn set_profile_mcp(state: State<AppState>, id: String, exposure: String) -> Result<(), String> {
     let engine = state.engine.lock().map_err(|e| e.to_string())?;
-    engine.profile_store().set_mcp_exposure(&id, &exposure).map_err(|e| e.to_string())
+    engine
+        .profile_store()
+        .set_mcp_exposure(&id, &exposure)
+        .map_err(|e| e.to_string())
 }
 
 #[command]
 pub fn search_profiles(state: State<AppState>, query: String) -> Result<Vec<ProfileRow>, String> {
     let engine = state.engine.lock().map_err(|e| e.to_string())?;
-    engine.profile_store().search_profiles_fts(&query).map_err(|e| e.to_string())
+    engine
+        .profile_store()
+        .search_profiles_fts(&query)
+        .map_err(|e| e.to_string())
 }
 
 #[command]
@@ -300,7 +349,10 @@ pub fn get_profile_attributes(
     profile_id: String,
 ) -> Result<Vec<AttributeRow>, String> {
     let engine = state.engine.lock().map_err(|e| e.to_string())?;
-    engine.profile_store().get_attributes(&profile_id).map_err(|e| e.to_string())
+    engine
+        .profile_store()
+        .get_attributes(&profile_id)
+        .map_err(|e| e.to_string())
 }
 
 #[command]
@@ -353,7 +405,10 @@ pub fn get_profile_relationships(
     profile_id: String,
 ) -> Result<Vec<RelationshipRow>, String> {
     let engine = state.engine.lock().map_err(|e| e.to_string())?;
-    engine.profile_store().get_relationships(&profile_id).map_err(|e| e.to_string())
+    engine
+        .profile_store()
+        .get_relationships(&profile_id)
+        .map_err(|e| e.to_string())
 }
 
 #[command]
@@ -376,7 +431,10 @@ pub fn get_profile_workspace_links(
     profile_id: String,
 ) -> Result<Vec<WorkspaceLinkRow>, String> {
     let engine = state.engine.lock().map_err(|e| e.to_string())?;
-    engine.profile_store().get_workspace_links(&profile_id).map_err(|e| e.to_string())
+    engine
+        .profile_store()
+        .get_workspace_links(&profile_id)
+        .map_err(|e| e.to_string())
 }
 
 #[command]
@@ -385,5 +443,8 @@ pub fn get_profiles_for_workspace(
     workspace_id: String,
 ) -> Result<Vec<ProfileRow>, String> {
     let engine = state.engine.lock().map_err(|e| e.to_string())?;
-    engine.profile_store().get_profiles_for_workspace(&workspace_id).map_err(|e| e.to_string())
+    engine
+        .profile_store()
+        .get_profiles_for_workspace(&workspace_id)
+        .map_err(|e| e.to_string())
 }

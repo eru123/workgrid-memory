@@ -21,8 +21,7 @@ pub fn run() {
                 .app_data_dir()
                 .expect("failed to resolve app data directory");
 
-            let engine = Engine::open(&app_data_dir)
-                .expect("failed to open engine data stores");
+            let engine = Engine::open(&app_data_dir).expect("failed to open engine data stores");
 
             let engine = Arc::new(Mutex::new(engine));
             let mcp_server = McpServer::new(Arc::clone(&engine), 9876);
