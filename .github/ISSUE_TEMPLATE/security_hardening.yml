@@ -1,0 +1,42 @@
+name: Security hardening request
+description: Suggest a security or privacy hardening improvement that is not an active vulnerability.
+title: "[Security Hardening]: "
+labels: ["security", "hardening", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If this is an active vulnerability, do not open a public issue. Follow SECURITY.md instead.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What security or privacy improvement are you suggesting?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Workspace file access
+        - Profile privacy
+        - MCP server
+        - Secret redaction
+        - Logs
+        - Storage
+        - Import/export
+        - Build/release
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Why it matters
+      description: Explain the risk this would reduce.
+    validations:
+      required: true

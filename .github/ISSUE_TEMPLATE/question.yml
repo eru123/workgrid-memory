@@ -1,0 +1,33 @@
+name: Question
+description: Ask a non-security question about WorkGrid Memory.
+title: "[Question]: "
+labels: ["question", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include secrets, private profile data, private photos, or customer code.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What do you want to know?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Installation
+        - Desktop app
+        - Workspace indexing
+        - Global profiles
+        - MCP integration
+        - Security/privacy
+        - Development
+        - Other
+    validations:
+      required: true

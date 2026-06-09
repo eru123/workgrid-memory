@@ -1,0 +1,56 @@
+name: Feature request
+description: Suggest a new feature or improvement.
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem should this feature solve?
+      placeholder: "I want WorkGrid Memory to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the feature you want.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Desktop app
+        - Workspace indexing
+        - Search/retrieval
+        - Code intelligence
+        - Global profiles
+        - MCP server
+        - Privacy/security
+        - Documentation
+        - Build/release
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Security/privacy impact
+      description: Could this expose workspace data, profile data, photos/assets, secrets, or MCP access?
+      placeholder: "Describe possible risks and safeguards."
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches did you consider?
+    validations:
+      required: false
