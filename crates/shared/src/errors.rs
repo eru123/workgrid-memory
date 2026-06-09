@@ -1,5 +1,12 @@
 use thiserror::Error;
 
+#[cfg(feature = "rusqlite")]
+impl From<rusqlite::Error> for WorkGridError {
+    fn from(e: rusqlite::Error) -> Self {
+        WorkGridError::Database(e.to_string())
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum WorkGridError {
     #[error("Workspace not found: {0}")]

@@ -12,4 +12,4 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 rusqlite = { workspace = true }
-workgrid-shared = { path = "../shared" }
+workgrid-shared = { path = "../shared", features = ["rusqlite"] }
