@@ -9,5 +9,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+uuid = { workspace = true }
 workgrid-engine = { path = "../engine" }
 workgrid-shared = { path = "../shared" }

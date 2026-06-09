@@ -13,16 +13,30 @@ pub struct McpServer {
     engine: Arc<Mutex<Engine>>,
     port: u16,
     server_handle: Option<HttpServerHandle>,
+    auth_token: String,
 }
 
 impl McpServer {
     /// Create a new MCP server backed by the given engine.
     pub fn new(engine: Arc<Mutex<Engine>>, port: u16) -> Self {
+        let token = uuid::Uuid::new_v4().to_string();
         McpServer {
             engine,
             port,
             server_handle: None,
+            auth_token: token,
         }
+    }
+
+    /// The current auth token (required for HTTP requests).
+    pub fn auth_token(&self) -> &str {
+        &self.auth_token
+    }
+
+    /// Rotate the auth token, invalidating the old one.
+    pub fn rotate_token(&mut self) -> String {
+        self.auth_token = uuid::Uuid::new_v4().to_string();
+        self.auth_token.clone()
     }
 
     /// Port the server is configured for.
@@ -40,12 +54,14 @@ impl McpServer {
 
         let addr = format!("127.0.0.1:{}", self.port);
         let engine = Arc::clone(&self.engine);
+        let token = self.auth_token.clone();
 
         let handler = Arc::new(move |request: McpRequest| -> serde_json::Value {
             let server = McpServer {
                 engine: Arc::clone(&engine),
                 port: 0,
                 server_handle: None,
+                auth_token: token.clone(),
             };
             server.handle_request(request)
         });
@@ -53,7 +69,7 @@ impl McpServer {
         let running = Arc::new(AtomicBool::new(true));
         let running_clone = Arc::clone(&running);
 
-        let handle = spawn_http_server(&addr, handler, running_clone)?;
+        let handle = spawn_http_server(&addr, handler, running_clone, &self.auth_token)?;
 
         self.server_handle = Some(handle);
         info!("MCP server started on {}", addr);

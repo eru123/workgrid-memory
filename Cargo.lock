@@ -1824,6 +1824,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tracing",
+ "uuid",
  "workgrid-engine",
  "workgrid-shared",
 ]

@@ -16,6 +16,7 @@ use retrieval::hybrid_search::{self, HybridSearchResult};
 use scanner::chunker::{chunk_text, ChunkConfig};
 use scanner::edge_builder::extract_edges;
 use scanner::file_scanner;
+use scanner::secrets::{is_secret_file, redact_secrets};
 use scanner::symbol_extractor::extract_symbols;
 use workgrid_shared::errors::WorkGridError;
 use workgrid_shared::types::WorkspaceStatus;
@@ -118,6 +119,22 @@ impl Engine {
         for file_entry in &scan_result.files {
             match std::fs::read_to_string(&file_entry.absolute_path) {
                 Ok(content) => {
+                    // Skip known secret files
+                    if is_secret_file(&file_entry.relative_path) {
+                        continue;
+                    }
+                    // Redact secrets before processing
+                    let scan = redact_secrets(&content);
+                    let safe_content = if scan.found > 0 {
+                        warn!(
+                            "Redacted {} secret(s) in {}",
+                            scan.found, file_entry.relative_path
+                        );
+                        scan.redacted_content
+                    } else {
+                        content
+                    };
+
                     let file_id = store.insert_file(
                         &file_entry.relative_path,
                         file_entry.language.as_deref(),
@@ -126,7 +143,7 @@ impl Engine {
                     )?;
 
                     // 1. Chunk the file into manageable pieces
-                    let chunks = chunk_text(&content, &chunk_config);
+                    let chunks = chunk_text(&safe_content, &chunk_config);
                     for chunk in &chunks {
                         if chunk.content.trim().is_empty() {
                             continue;
@@ -148,7 +165,7 @@ impl Engine {
                     }
 
                     // 2. Extract symbols and store as symbol chunks
-                    let symbols = extract_symbols(&content, file_entry.language.as_deref());
+                    let symbols = extract_symbols(&safe_content, file_entry.language.as_deref());
                     for sym in &symbols {
                         let sig = sym.signature.as_deref().unwrap_or(&sym.name);
                         if sig.trim().is_empty() {
@@ -168,7 +185,7 @@ impl Engine {
 
                     // 3. Extract graph edges (imports, exports, references)
                     let edges = extract_edges(
-                        &content,
+                        &safe_content,
                         &file_entry.relative_path,
                         file_entry.language.as_deref(),
                     );

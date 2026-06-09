@@ -53,6 +53,8 @@ pub fn run() {
             commands::start_mcp_server,
             commands::stop_mcp_server,
             commands::get_mcp_status,
+            commands::get_mcp_token,
+            commands::rotate_mcp_token,
             commands::create_profile,
             commands::list_profiles,
             commands::get_profile,

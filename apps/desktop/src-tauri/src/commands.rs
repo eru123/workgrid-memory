@@ -192,6 +192,24 @@ pub fn get_mcp_status(state: State<AppState>) -> Result<McpStatus, String> {
     })
 }
 
+#[command]
+pub fn get_mcp_token(state: State<AppState>) -> Result<String, String> {
+    let server = state.mcp_server.lock().map_err(|e| e.to_string())?;
+    Ok(server.auth_token().to_string())
+}
+
+#[command]
+pub fn rotate_mcp_token(state: State<AppState>) -> Result<String, String> {
+    let mut server = state.mcp_server.lock().map_err(|e| e.to_string())?;
+    let new_token = server.rotate_token();
+    // Restart server with new token if running
+    if server.is_running() {
+        server.stop();
+        server.start().map_err(|e| e.to_string())?;
+    }
+    Ok(new_token)
+}
+
 // ── Profile CRUD ──
 
 #[command]

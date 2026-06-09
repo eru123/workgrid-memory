@@ -15,6 +15,7 @@ pub fn spawn_http_server(
     addr: &str,
     handler: Arc<dyn Fn(McpRequest) -> serde_json::Value + Send + Sync>,
     running: Arc<AtomicBool>,
+    auth_token: &str,
 ) -> Result<HttpServerHandle, String> {
     let listener = TcpListener::bind(addr)
         .map_err(|e| format!("Failed to bind MCP server to {}: {}", addr, e))?;
@@ -23,6 +24,7 @@ pub fn spawn_http_server(
         .map_err(|e| format!("Failed to set non-blocking: {}", e))?;
 
     let addr_owned = addr.to_string();
+    let token_owned = auth_token.to_string();
     info!("MCP HTTP server listening on {}", addr_owned);
 
     let running_for_thread = Arc::clone(&running);
@@ -40,7 +42,7 @@ pub fn spawn_http_server(
                     };
 
                     let request_str = String::from_utf8_lossy(&buf[..n]);
-                    let response = handle_http_request(&request_str, &handler);
+                    let response = handle_http_request(&request_str, &handler, &token_owned);
 
                     // Send response (ignore errors — client may have disconnected)
                     let _ = stream.write_all(response.as_bytes());
@@ -68,7 +70,26 @@ pub fn spawn_http_server(
 fn handle_http_request(
     raw: &str,
     handler: &Arc<dyn Fn(McpRequest) -> serde_json::Value + Send + Sync>,
+    auth_token: &str,
 ) -> String {
+    // Check Authorization header
+    let auth_header = raw
+        .lines()
+        .find(|l| l.to_lowercase().starts_with("authorization:"))
+        .unwrap_or("");
+    let provided_token = auth_header
+        .trim_start_matches(|c: char| c != 'B' && c != 'b')
+        .trim_start_matches("Bearer ")
+        .trim_start_matches("bearer ")
+        .trim();
+    if provided_token != auth_token {
+        return http_response(401, &serde_json::json!({
+            "jsonrpc": "2.0",
+            "error": { "code": -32001, "message": "Unauthorized: invalid or missing auth token" },
+            "id": null
+        }).to_string());
+    }
+
     // Extract JSON body from the HTTP request
     let body = extract_json_body(raw);
 
