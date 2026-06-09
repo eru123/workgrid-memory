@@ -221,6 +221,108 @@ impl WorkspaceMetadataStore {
         Ok(())
     }
 
+    /// Insert a graph edge between two entities.
+    pub fn insert_edge(
+        &self,
+        from_id: &str,
+        to_id: &str,
+        edge_type: &str,
+        confidence: f64,
+    ) -> Result<(), WorkGridError> {
+        let id = uuid::Uuid::new_v4().to_string();
+        self.db.execute(
+            "INSERT OR REPLACE INTO edges (id, from_id, to_id, edge_type, confidence)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![&id, from_id, to_id, edge_type, confidence],
+        )?;
+        Ok(())
+    }
+
+    /// Get all edges originating from a file (by file path).
+    pub fn get_edges_for_file(&self, file_path: &str) -> Result<Vec<EdgeResult>, WorkGridError> {
+        let mut stmt = self.db.prepare(
+            "SELECT e.id, e.from_id, e.to_id, e.edge_type, e.confidence, f.path as to_path
+             FROM edges e
+             LEFT JOIN files f ON f.id = e.to_id
+             WHERE e.from_id = ?1
+             ORDER BY e.confidence DESC
+             LIMIT 50",
+        )?;
+        let rows = stmt
+            .query_map(params![file_path], |row| {
+                Ok(EdgeResult {
+                    id: row.get(0)?,
+                    from_id: row.get(1)?,
+                    to_id: row.get(2)?,
+                    edge_type: row.get(3)?,
+                    confidence: row.get(4)?,
+                    to_path: row.get(5)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Find files related to the given file path via graph edges.
+    /// Returns deduplicated file paths with relationship summaries.
+    pub fn get_related_files(&self, file_path: &str) -> Result<Vec<RelatedFile>, WorkGridError> {
+        // Find the file ID for the given path
+        let file_id: Option<String> = self
+            .db
+            .query_row(
+                "SELECT id FROM files WHERE path = ?1",
+                params![file_path],
+                |row| row.get(0),
+            )
+            .ok();
+
+        let Some(file_id) = file_id else {
+            return Ok(Vec::new());
+        };
+
+        // Get edges where this file is either from or to
+        let mut stmt = self.db.prepare(
+            "SELECT DISTINCT e.from_id, e.to_id, e.edge_type, e.confidence, f.path
+             FROM edges e
+             JOIN files f ON (
+                 (f.id = e.to_id AND e.from_id = ?1) OR
+                 (f.id = e.from_id AND e.to_id = ?1)
+             )
+             WHERE f.path != ?2
+             LIMIT 30",
+        )?;
+        let rows = stmt
+            .query_map(params![&file_id, file_path], |row| {
+                Ok(RelatedFile {
+                    file_path: row.get(4)?,
+                    relationship: row.get::<_, String>(2)?,
+                    confidence: row.get(3)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Deduplicate by file_path, keeping highest confidence
+        let mut seen: std::collections::HashMap<String, RelatedFile> =
+            std::collections::HashMap::new();
+        for row in rows {
+            seen.entry(row.file_path.clone())
+                .and_modify(|existing| {
+                    if row.confidence > existing.confidence {
+                        *existing = row.clone();
+                    }
+                })
+                .or_insert(row);
+        }
+
+        let mut results: Vec<RelatedFile> = seen.into_values().collect();
+        results.sort_by(|a, b| {
+            b.confidence
+                .partial_cmp(&a.confidence)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        Ok(results)
+    }
+
     /// Get statistics for a workspace.
     pub fn get_stats(&self) -> Result<WorkspaceStats, WorkGridError> {
         let file_count: i64 = self.db.query_row(
@@ -319,6 +421,23 @@ pub struct WorkspaceStats {
     pub file_count: u64,
     pub chunk_count: u64,
     pub symbol_count: u64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct EdgeResult {
+    pub id: String,
+    pub from_id: String,
+    pub to_id: String,
+    pub edge_type: String,
+    pub confidence: f64,
+    pub to_path: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct RelatedFile {
+    pub file_path: String,
+    pub relationship: String,
+    pub confidence: f64,
 }
 
 /// Rough token estimate: ~4 chars per token for code.

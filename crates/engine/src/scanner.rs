@@ -13,3 +13,6 @@ pub mod hasher;
 
 /// Symbol extractor — regex-based code symbol extraction for JS/TS, PHP, Python, Rust, Markdown.
 pub mod symbol_extractor;
+
+/// Graph edge builder — extracts import/export, reference, and relationship edges.
+pub mod edge_builder;

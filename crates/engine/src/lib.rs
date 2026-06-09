@@ -14,6 +14,7 @@ use indexer::metadata::MetadataStore;
 use indexer::profile::ProfileStore;
 use retrieval::hybrid_search::{self, HybridSearchResult};
 use scanner::chunker::{chunk_text, ChunkConfig};
+use scanner::edge_builder::extract_edges;
 use scanner::file_scanner;
 use scanner::symbol_extractor::extract_symbols;
 use workgrid_shared::errors::WorkGridError;
@@ -164,6 +165,21 @@ impl Engine {
                             Some(&sym.name),
                         )?;
                     }
+
+                    // 3. Extract graph edges (imports, exports, references)
+                    let edges = extract_edges(
+                        &content,
+                        &file_entry.relative_path,
+                        file_entry.language.as_deref(),
+                    );
+                    for edge in &edges {
+                        let _ = store.insert_edge(
+                            &file_id,
+                            &edge.to_reference,
+                            edge.edge_type.as_str(),
+                            edge.confidence,
+                        );
+                    }
                 }
                 Err(e) => {
                     warn!("Cannot read {}: {}", file_entry.relative_path, e);
@@ -171,7 +187,7 @@ impl Engine {
             }
         }
 
-        // 3. Generate embeddings in batches and store them per-chunk
+        // 4. Generate embeddings in batches and store them per-chunk
         if let Some(ref provider) = self.embedding {
             let mut stored = 0usize;
             for batch in embedding_texts.chunks(32) {
@@ -233,6 +249,26 @@ impl Engine {
     ) -> Result<indexer::fts::WorkspaceStats, WorkGridError> {
         let store = self.open_workspace_store(workspace_id)?;
         store.get_stats()
+    }
+
+    /// Get files related to a given file path via graph edges.
+    pub fn get_related_files(
+        &self,
+        workspace_id: &str,
+        file_path: &str,
+    ) -> Result<Vec<indexer::fts::RelatedFile>, WorkGridError> {
+        let store = self.open_workspace_store(workspace_id)?;
+        store.get_related_files(file_path)
+    }
+
+    /// Get all edges for a file.
+    pub fn get_edges_for_file(
+        &self,
+        workspace_id: &str,
+        file_path: &str,
+    ) -> Result<Vec<indexer::fts::EdgeResult>, WorkGridError> {
+        let store = self.open_workspace_store(workspace_id)?;
+        store.get_edges_for_file(file_path)
     }
 
     // ── Profile access ──

@@ -150,13 +150,22 @@ impl McpServer {
     }
 
     fn tool_get_file_context(&self, args: &serde_json::Value) -> Result<serde_json::Value, String> {
-        let _workspace_id = get_str(args, "workspace_id")?;
-        let _file_path = get_str(args, "file_path")?;
+        let workspace_id = get_str(args, "workspace_id")?;
+        let file_path = get_str(args, "file_path")?;
 
-        // TODO: implement file-level context retrieval
+        let engine = lock(&self.engine)?;
+        let related = engine
+            .get_related_files(&workspace_id, &file_path)
+            .map_err(|e| e.to_string())?;
+        let edges = engine
+            .get_edges_for_file(&workspace_id, &file_path)
+            .map_err(|e| e.to_string())?;
+
         Ok(serde_json::json!({
-            "status": "not_implemented",
-            "message": "File context retrieval will be available in a future update"
+            "file_path": file_path,
+            "workspace_id": workspace_id,
+            "related_files": related,
+            "edges": edges
         }))
     }
 
@@ -188,13 +197,15 @@ impl McpServer {
         &self,
         args: &serde_json::Value,
     ) -> Result<serde_json::Value, String> {
-        let _workspace_id = get_str(args, "workspace_id")?;
-        let _file_path = get_str(args, "file_path")?;
+        let workspace_id = get_str(args, "workspace_id")?;
+        let file_path = get_str(args, "file_path")?;
 
-        Ok(serde_json::json!({
-            "status": "not_implemented",
-            "message": "Related files detection requires graph data (coming soon)"
-        }))
+        let engine = lock(&self.engine)?;
+        let related = engine
+            .get_related_files(&workspace_id, &file_path)
+            .map_err(|e| e.to_string())?;
+
+        Ok(serde_json::to_value(related).map_err(|e| e.to_string())?)
     }
 
     fn tool_get_workspace_map(
