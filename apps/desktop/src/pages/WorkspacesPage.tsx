@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { Workspace } from "@workgrid/schemas";
@@ -6,8 +6,9 @@ import type { Workspace } from "@workgrid/schemas";
 export default function WorkspacesPage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
 
-  const fetchWorkspaces = async () => {
+  const fetchWorkspaces = useCallback(async () => {
     try {
       const list = await invoke<Workspace[]>("list_workspaces");
       setWorkspaces(list);
@@ -16,11 +17,23 @@ export default function WorkspacesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchWorkspaces();
-  }, []);
+  }, [fetchWorkspaces]);
+
+  // Poll while any workspace is indexing
+  useEffect(() => {
+    const hasIndexing = workspaces.some((ws) => ws.status === "indexing");
+    if (!hasIndexing) return;
+
+    const interval = setInterval(() => {
+      fetchWorkspaces();
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [workspaces, fetchWorkspaces]);
 
   const handleAddWorkspace = async () => {
     const selected = await open({
@@ -51,6 +64,42 @@ export default function WorkspacesPage() {
     }
   };
 
+  const handleReindex = async (id: string) => {
+    setActionLoading((prev) => ({ ...prev, [id]: true }));
+    try {
+      await invoke("reindex_workspace", { workspaceId: id });
+      await fetchWorkspaces();
+    } catch (err) {
+      console.error("Reindex failed:", err);
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [id]: false }));
+    }
+  };
+
+  const handleCancel = async (id: string) => {
+    setActionLoading((prev) => ({ ...prev, [id]: true }));
+    try {
+      await invoke("cancel_indexing", { workspaceId: id });
+      await fetchWorkspaces();
+    } catch (err) {
+      console.error("Cancel failed:", err);
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [id]: false }));
+    }
+  };
+
+  const handleResume = async (id: string) => {
+    setActionLoading((prev) => ({ ...prev, [id]: true }));
+    try {
+      await invoke("resume_indexing", { workspaceId: id });
+      await fetchWorkspaces();
+    } catch (err) {
+      console.error("Resume failed:", err);
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [id]: false }));
+    }
+  };
+
   const statusBadge = (status: string) => {
     const colors: Record<string, string> = {
       new: "#8b8fa3",
@@ -64,10 +113,65 @@ export default function WorkspacesPage() {
     return (
       <span
         className="px-2 py-0.5 rounded text-xs font-medium"
-        style={{ background: `${colors[status] || "#8b8fa3"}20`, color: colors[status] || "#8b8fa3" }}
+        style={{
+          background: `${colors[status] || "#8b8fa3"}20`,
+          color: colors[status] || "#8b8fa3",
+        }}
       >
         {status}
       </span>
+    );
+  };
+
+  const actionButton = (ws: Workspace) => {
+    const isLoading = actionLoading[ws.id];
+
+    if (ws.status === "indexing") {
+      return (
+        <button
+          onClick={() => handleCancel(ws.id)}
+          disabled={isLoading}
+          className="px-3 py-1 rounded text-xs transition-colors cursor-pointer shrink-0"
+          style={{
+            background: "transparent",
+            color: "var(--color-danger)",
+            border: "1px solid var(--color-danger)",
+          }}
+        >
+          {isLoading ? "..." : "Stop"}
+        </button>
+      );
+    }
+
+    if (ws.status === "paused") {
+      return (
+        <button
+          onClick={() => handleResume(ws.id)}
+          disabled={isLoading}
+          className="px-3 py-1 rounded text-xs font-medium transition-colors cursor-pointer shrink-0"
+          style={{
+            background: "var(--color-accent)",
+            color: "#fff",
+          }}
+        >
+          {isLoading ? "..." : "Resume"}
+        </button>
+      );
+    }
+
+    // new, ready, stale, degraded, error — all get Index/Re-index
+    return (
+      <button
+        onClick={() => handleReindex(ws.id)}
+        disabled={isLoading}
+        className="px-3 py-1 rounded text-xs font-medium transition-colors cursor-pointer shrink-0"
+        style={{
+          background: "var(--color-accent)",
+          color: "#fff",
+        }}
+      >
+        {isLoading ? "..." : ws.status === "new" ? "Index" : "Re-index"}
+      </button>
     );
   };
 
@@ -112,7 +216,10 @@ export default function WorkspacesPage() {
                     <h3 className="text-sm font-semibold">{ws.name}</h3>
                     {statusBadge(ws.status)}
                   </div>
-                  <p className="text-xs truncate" style={{ color: "var(--color-text-muted)" }}>
+                  <p
+                    className="text-xs truncate"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
                     {ws.rootPath}
                   </p>
                   {ws.gitRemote && (
@@ -120,24 +227,32 @@ export default function WorkspacesPage() {
                       remote: {ws.gitRemote}
                     </p>
                   )}
-                  <div className="flex gap-4 mt-2 text-xs" style={{ color: "var(--color-text-muted)" }}>
+                  <div
+                    className="flex gap-4 mt-2 text-xs"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
                     <span>Added: {new Date(ws.createdAt).toLocaleDateString()}</span>
                     {ws.lastIndexedAt && (
-                      <span>Indexed: {new Date(ws.lastIndexedAt).toLocaleDateString()}</span>
+                      <span>
+                        Indexed: {new Date(ws.lastIndexedAt).toLocaleDateString()}
+                      </span>
                     )}
                   </div>
                 </div>
-                <button
-                  onClick={() => handleRemoveWorkspace(ws.id)}
-                  className="px-3 py-1 rounded text-xs transition-colors cursor-pointer ml-4 shrink-0"
-                  style={{
-                    background: "transparent",
-                    color: "var(--color-danger)",
-                    border: "1px solid var(--color-danger)",
-                  }}
-                >
-                  Remove
-                </button>
+                <div className="flex gap-2 ml-4 shrink-0">
+                  {actionButton(ws)}
+                  <button
+                    onClick={() => handleRemoveWorkspace(ws.id)}
+                    className="px-3 py-1 rounded text-xs transition-colors cursor-pointer"
+                    style={{
+                      background: "transparent",
+                      color: "var(--color-danger)",
+                      border: "1px solid var(--color-danger)",
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             </div>
           ))}

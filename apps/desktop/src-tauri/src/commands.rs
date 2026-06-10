@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tauri::{command, State};
+use tracing::error;
 use workgrid_engine::indexer::profile::{
     AttributeRow, InstructionMatch, ProfileRow, RelationshipRow, WorkspaceLinkRow,
 };
@@ -33,9 +34,27 @@ pub fn add_workspace(
     path: String,
 ) -> Result<Workspace, String> {
     let engine = state.engine.lock().map_err(|e| e.to_string())?;
-    engine
+    engine.reset_cancel_flag();
+    let ws = engine
         .add_workspace(&name, &path)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    drop(engine);
+
+    // Auto-trigger indexing in background
+    let engine_arc = Arc::clone(&state.engine);
+    let ws_id = ws.id.clone();
+    tauri::async_runtime::spawn(async move {
+        let _ = tauri::async_runtime::spawn_blocking(move || {
+            let engine = engine_arc.lock().map_err(|e| e.to_string())?;
+            tauri::async_runtime::block_on(engine.index_workspace(&ws_id))
+                .map_err(|e| error!("Auto-index failed for {}: {}", ws_id, e))
+                .ok();
+            Ok::<(), String>(())
+        })
+        .await;
+    });
+
+    Ok(ws)
 }
 
 #[command]
@@ -174,6 +193,58 @@ pub fn get_workspace_stats(
         chunk_count: stats.chunk_count,
         symbol_count: stats.symbol_count,
     })
+}
+
+#[command]
+pub async fn reindex_workspace(
+    state: State<'_, AppState>,
+    workspace_id: String,
+) -> Result<IndexResult, String> {
+    let engine = Arc::clone(&state.engine);
+    let ws_id = workspace_id.clone();
+    let stats = tauri::async_runtime::spawn_blocking(move || {
+        let engine = engine.lock().map_err(|e| e.to_string())?;
+        engine.reset_cancel_flag();
+        tauri::async_runtime::block_on(engine.index_workspace(&ws_id)).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
+    Ok(IndexResult {
+        file_count: stats.file_count,
+        chunk_count: stats.chunk_count,
+        symbol_count: stats.symbol_count,
+    })
+}
+
+#[command]
+pub fn cancel_indexing(state: State<AppState>, workspace_id: String) -> Result<(), String> {
+    let engine = state.engine.lock().map_err(|e| e.to_string())?;
+    engine
+        .cancel_indexing(&workspace_id)
+        .map_err(|e| e.to_string())
+}
+
+#[command]
+pub fn resume_indexing(state: State<AppState>, workspace_id: String) -> Result<(), String> {
+    let engine = state.engine.lock().map_err(|e| e.to_string())?;
+    engine.reset_cancel_flag();
+    drop(engine);
+
+    let engine_arc = Arc::clone(&state.engine);
+    let ws_id = workspace_id.clone();
+    tauri::async_runtime::spawn(async move {
+        let _ = tauri::async_runtime::spawn_blocking(move || {
+            let engine = engine_arc.lock().map_err(|e| e.to_string())?;
+            tauri::async_runtime::block_on(engine.index_workspace(&ws_id))
+                .map_err(|e| error!("Resume-index failed for {}: {}", ws_id, e))
+                .ok();
+            Ok::<(), String>(())
+        })
+        .await;
+    });
+
+    Ok(())
 }
 
 // ── MCP Server Control ──

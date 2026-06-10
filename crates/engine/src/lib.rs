@@ -6,6 +6,8 @@ pub mod retrieval;
 pub mod scanner;
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tracing::{info, warn};
 
 use indexer::embedding_queue::EmbeddingProvider;
@@ -27,6 +29,7 @@ pub struct Engine {
     metadata: MetadataStore,
     profiles: ProfileStore,
     embedding: Option<EmbeddingProvider>,
+    cancel_flag: Arc<AtomicBool>,
 }
 
 impl Engine {
@@ -35,12 +38,14 @@ impl Engine {
         let metadata = MetadataStore::open(&data_dir.join("app.sqlite"))?;
         let profiles = ProfileStore::open(&data_dir.join("profiles.sqlite"))?;
         let embedding = Some(EmbeddingProvider::ollama_default());
+        let cancel_flag = Arc::new(AtomicBool::new(false));
         info!("Engine opened at {}", data_dir.display());
         Ok(Engine {
             data_dir: data_dir.to_path_buf(),
             metadata,
             profiles,
             embedding,
+            cancel_flag,
         })
     }
 
@@ -117,6 +122,12 @@ impl Engine {
         let mut embedding_texts: Vec<(String, String)> = Vec::new();
 
         for file_entry in &scan_result.files {
+            if self.cancel_flag.load(Ordering::Relaxed) {
+                warn!("Indexing cancelled by user for workspace {}", workspace_id);
+                self.metadata
+                    .update_workspace_status(workspace_id, WorkspaceStatus::Paused)?;
+                return Err(WorkGridError::Indexing("cancelled".into()));
+            }
             match std::fs::read_to_string(&file_entry.absolute_path) {
                 Ok(content) => {
                     // Skip known secret files
@@ -244,6 +255,20 @@ impl Engine {
     /// Scan a workspace directory (read-only, no index writes).
     pub fn scan_workspace(&self, path: &Path) -> Result<file_scanner::ScanResult, WorkGridError> {
         file_scanner::scan_workspace(path, &[])
+    }
+
+    /// Signal any in-progress indexing to stop at the next file boundary.
+    pub fn cancel_indexing(&self, workspace_id: &str) -> Result<(), WorkGridError> {
+        self.cancel_flag.store(true, Ordering::SeqCst);
+        self.metadata
+            .update_workspace_status(workspace_id, WorkspaceStatus::Paused)?;
+        info!("Cancellation flagged for workspace {}", workspace_id);
+        Ok(())
+    }
+
+    /// Reset the cancellation flag so a new indexing pass can start.
+    pub fn reset_cancel_flag(&self) {
+        self.cancel_flag.store(false, Ordering::SeqCst);
     }
 
     // ── Retrieval ──
